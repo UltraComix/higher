@@ -33,25 +33,42 @@ function App() {
   const [isHighScore, setIsHighScore] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Local storage key for high scores
+  const LOCAL_SCORES_KEY = 'highScores';
+
+  // Load scores from localStorage
+  const loadLocalScores = () => {
+    try {
+      const savedScores = localStorage.getItem(LOCAL_SCORES_KEY);
+      if (savedScores) {
+        return JSON.parse(savedScores);
+      }
+    } catch (error) {
+      console.error('Error loading scores:', error);
+    }
+    // Default scores if none exist
+    return [
+      { name: "CPU", score: 100, date: "2024-12-11T21:56:21Z" },
+      { name: "BOT", score: 90, date: "2024-12-11T21:56:21Z" },
+      { name: "AI", score: 80, date: "2024-12-11T21:56:21Z" }
+    ];
+  };
+
+  // Save scores to localStorage
+  const saveLocalScores = (scores: HighScore[]) => {
+    try {
+      localStorage.setItem(LOCAL_SCORES_KEY, JSON.stringify(scores));
+    } catch (error) {
+      console.error('Error saving scores:', error);
+    }
+  };
+
   useEffect(() => {
-    fetchHighScores();
+    setHighScores(loadLocalScores());
   }, []);
 
   const fetchHighScores = async () => {
-    try {
-      const response = await fetch('/api/scores');
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setHighScores(data);
-      }
-    } catch (error) {
-      console.error('Error fetching scores:', error);
-    }
+    // Removed API call
   };
 
   const startNewGame = () => {
@@ -173,28 +190,25 @@ function App() {
     if (playerInitials.length === 0) return;
     
     try {
-      const response = await fetch('/api/scores', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: playerInitials.toUpperCase().padEnd(3, ' '),
-          score: Number(score)
-        })
-      });
+      const newScore: HighScore = {
+        name: playerInitials.toUpperCase().slice(0, 3),
+        score: score,
+        date: new Date().toISOString()
+      };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      // Add new score and sort
+      const updatedScores = [...highScores, newScore];
+      updatedScores.sort((a, b) => b.score - a.score);
+      const topScores = updatedScores.slice(0, 10);
 
-      const data = await response.json();
-      setHighScores(data);
+      // Save and update state
+      saveLocalScores(topScores);
+      setHighScores(topScores);
       setIsHighScore(false);
       setGameState('leaderboard');
     } catch (error) {
       console.error('Error saving score:', error);
-      alert('Unable to save score. Please try again later.');
+      alert('Unable to save score. Please try again.');
     }
   };
 
