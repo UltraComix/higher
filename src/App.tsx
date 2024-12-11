@@ -163,13 +163,9 @@ function App() {
   };
 
   const checkHighScore = (newScore: number) => {
-    if (highScores.length < 10) {
+    if (highScores.length < 10 || newScore > (highScores[9]?.score || 0)) {
       setIsHighScore(true);
       return;
-    }
-    
-    if (newScore > (highScores[highScores.length - 1]?.score || 0)) {
-      setIsHighScore(true);
     }
   };
 
@@ -244,8 +240,9 @@ function App() {
       ? nextCard.value > currentCard.value
       : nextCard.value < currentCard.value;
 
+    let pointsEarned = 0;
     if (correct) {
-      const pointsEarned = getScoreForGuess(currentCard.value, isHigher);
+      pointsEarned = getScoreForGuess(currentCard.value, isHigher);
       setScore(prev => prev + pointsEarned);
       setResultMessage(`Correct! +${pointsEarned} points`);
     } else {
@@ -256,9 +253,10 @@ function App() {
     if (cardsPlayed + 1 >= 29) {
       // This is the last guess, show game complete after the delay
       setTimeout(() => {
+        const finalScore = correct ? score + pointsEarned : score - 5;
         setGameComplete(true);
-        checkHighScore(score);
-        setResultMessage(`Game Complete! Final Score: ${score}`);
+        checkHighScore(finalScore);
+        setResultMessage(`Game Complete! Final Score: ${finalScore}`);
       }, 1500);
     } else {
       setTimeout(moveToNextCards, 1500);
