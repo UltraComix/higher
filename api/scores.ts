@@ -1,4 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import path from 'path';
+import fs from 'fs';
 
 interface Score {
   name: string;
@@ -6,8 +8,38 @@ interface Score {
   date: string;
 }
 
-// In-memory cache for development
-let scores: Score[] = [];
+// File path for storing scores
+const SCORES_FILE = path.join(process.cwd(), 'data', 'scores.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(path.join(process.cwd(), 'data'))) {
+  fs.mkdirSync(path.join(process.cwd(), 'data'));
+}
+
+// Initialize scores file if it doesn't exist
+if (!fs.existsSync(SCORES_FILE)) {
+  fs.writeFileSync(SCORES_FILE, '[]');
+}
+
+// Read scores from file
+function getScores(): Score[] {
+  try {
+    const data = fs.readFileSync(SCORES_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading scores:', error);
+    return [];
+  }
+}
+
+// Write scores to file
+function saveScores(scores: Score[]) {
+  try {
+    fs.writeFileSync(SCORES_FILE, JSON.stringify(scores));
+  } catch (error) {
+    console.error('Error saving scores:', error);
+  }
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -28,6 +60,7 @@ export default async function handler(
   try {
     // GET request - return scores
     if (req.method === 'GET') {
+      const scores = getScores();
       return res.status(200).json(scores);
     }
 
@@ -50,14 +83,20 @@ export default async function handler(
         date: new Date().toISOString()
       };
 
+      // Get current scores
+      const scores = getScores();
+
       // Add score and sort
       scores.push(newScore);
       scores.sort((a, b) => b.score - a.score);
       
       // Keep only top 10
-      scores = scores.slice(0, 10);
+      const topScores = scores.slice(0, 10);
 
-      return res.status(200).json(scores);
+      // Save scores
+      saveScores(topScores);
+
+      return res.status(200).json(topScores);
     }
 
     // Invalid method
