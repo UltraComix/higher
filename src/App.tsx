@@ -31,14 +31,26 @@ function App() {
   const [playerInitials, setPlayerInitials] = useState('');
   const [highScores, setHighScores] = useState<HighScore[]>([]);
   const [isHighScore, setIsHighScore] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Load high scores from localStorage
-    const savedScores = localStorage.getItem('highScores');
-    if (savedScores) {
-      setHighScores(JSON.parse(savedScores));
-    }
+    fetchHighScores();
   }, []);
+
+  const fetchHighScores = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/scores');
+      if (response.ok) {
+        const scores = await response.json();
+        setHighScores(scores);
+      }
+    } catch (error) {
+      console.error('Error fetching scores:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const startNewGame = () => {
     const cards: Card[] = Array.from({ length: 30 }, (_, i) => {
@@ -149,33 +161,34 @@ function App() {
   };
 
   const checkHighScore = (newScore: number) => {
-    const allScores = [...highScores, { name: '', score: newScore, date: new Date().toISOString() }];
-    const sortedScores = allScores
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
-    
-    const isInTop10 = sortedScores.some(s => s.score === newScore && s.name === '');
-    setIsHighScore(isInTop10);
+    if (highScores.length < 10 || newScore > highScores[highScores.length - 1]?.score) {
+      setIsHighScore(true);
+    }
   };
 
-  const saveHighScore = () => {
+  const saveHighScore = async () => {
     if (playerInitials.length === 0 || playerInitials.length > 3) return;
 
-    const newScore: HighScore = {
-      name: playerInitials.toUpperCase().padEnd(3, ' '),  // Pad with spaces if less than 3 chars
-      score,
-      date: new Date().toISOString()
-    };
+    try {
+      const response = await fetch('/api/scores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: playerInitials.toUpperCase().padEnd(3, ' '),
+          score
+        })
+      });
 
-    const allScores = [...highScores, newScore];
-    const sortedScores = allScores
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
-
-    setHighScores(sortedScores);
-    localStorage.setItem('highScores', JSON.stringify(sortedScores));
-    setIsHighScore(false);
-    setGameState('leaderboard');
+      if (response.ok) {
+        await fetchHighScores();
+        setIsHighScore(false);
+        setGameState('leaderboard');
+      }
+    } catch (error) {
+      console.error('Error saving score:', error);
+    }
   };
 
   const moveToNextCards = () => {
@@ -293,26 +306,37 @@ function App() {
   );
 
   const renderLeaderboard = () => (
-    <div className="flex flex-col items-center">
-      <h1 className="text-4xl font-bold text-yellow-400 mb-8">Leaderboard</h1>
-      <div className="bg-gray-800 p-6 rounded-xl w-96 mb-8">
-        {highScores.length === 0 ? (
-          <div className="text-gray-400 text-center text-xl">No high scores yet!</div>
-        ) : (
-          highScores.map((score, index) => (
-            <div key={index} className="flex justify-between items-center mb-4 text-xl">
-              <div className="flex items-center gap-4">
-                <span className="text-gray-400 w-8">{index + 1}.</span>
-                <span className="text-white">{score.name}</span>
-              </div>
-              <span className="text-yellow-400">{score.score}</span>
-            </div>
-          ))
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-8">
+      <h1 className="text-4xl font-bold text-yellow-400 mb-4">Leaderboard</h1>
+      {loading ? (
+        <div className="text-gray-400 text-center text-xl">Loading...</div>
+      ) : (
+        <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md">
+          <table className="w-full">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-700">
+                <th className="pb-2">Rank</th>
+                <th className="pb-2">Name</th>
+                <th className="pb-2">Score</th>
+                <th className="pb-2">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {highScores.map((score, index) => (
+                <tr key={index} className="text-center border-b border-gray-700 last:border-0">
+                  <td className="py-2">{index + 1}</td>
+                  <td className="py-2">{score.name}</td>
+                  <td className="py-2">{score.score}</td>
+                  <td className="py-2">{new Date(score.date).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <button
         onClick={() => setGameState('home')}
-        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-xl"
+        className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-xl"
       >
         Back to Home
       </button>
@@ -343,7 +367,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 relative">
       <div className="absolute inset-0 before:content-[''] before:absolute before:inset-0 before:bg-[url('/bg.png')] before:bg-repeat before:bg-[length:300px_300px] before:grayscale"></div>
-      <div className="bg-black bg-opacity-70 p-8 rounded-xl relative z-10 w-full max-w-[1200px] min-h-[800px] md:min-h-0">
+      <div className="bg-black bg-opacity-70 p-8 rounded-xl relative z-10 w-[95%] md:w-[1200px]">
         {gameState === 'home' && renderHome()}
         {gameState === 'leaderboard' && renderLeaderboard()}
         {gameState === 'playing' && (
