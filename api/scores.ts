@@ -8,18 +8,15 @@ interface Score {
 }
 
 // Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || ''
-});
+const redis = Redis.fromEnv();
 
 const SCORES_KEY = 'game:scores';
 
-// In-memory scores (will reset on deploy)
-let scores: Score[] = [
-  { name: "CPU", score: 100, date: "2024-12-11T21:31:01Z" },
-  { name: "BOT", score: 90, date: "2024-12-11T21:31:01Z" },
-  { name: "AI", score: 80, date: "2024-12-11T21:31:01Z" }
+// Default scores if none exist
+const defaultScores: Score[] = [
+  { name: "CPU", score: 100, date: "2024-12-11T21:50:08Z" },
+  { name: "BOT", score: 90, date: "2024-12-11T21:50:08Z" },
+  { name: "AI", score: 80, date: "2024-12-11T21:50:08Z" }
 ];
 
 export default async function handler(
@@ -39,10 +36,28 @@ export default async function handler(
   }
 
   try {
+    // Check Redis connection
+    try {
+      await redis.ping();
+    } catch (error) {
+      console.error('Redis connection error:', error);
+      throw new Error('Failed to connect to Redis');
+    }
+
     // GET scores
     if (req.method === 'GET') {
-      const scores = await redis.get<Score[]>(SCORES_KEY) || [];
-      return res.status(200).json(scores);
+      try {
+        const scores = await redis.get<Score[]>(SCORES_KEY);
+        if (!scores) {
+          // Initialize with default scores if none exist
+          await redis.set(SCORES_KEY, defaultScores);
+          return res.status(200).json(defaultScores);
+        }
+        return res.status(200).json(scores);
+      } catch (error) {
+        console.error('Error fetching scores:', error);
+        throw new Error('Failed to fetch scores');
+      }
     }
 
     // POST new score
@@ -57,25 +72,31 @@ export default async function handler(
         });
       }
 
-      // Create new score
-      const newScore: Score = {
-        name: name.toUpperCase().slice(0, 3),
-        score,
-        date: new Date().toISOString()
-      };
+      try {
+        // Create new score
+        const newScore: Score = {
+          name: name.toUpperCase().slice(0, 3),
+          score,
+          date: new Date().toISOString()
+        };
 
-      // Get existing scores
-      const existingScores = await redis.get<Score[]>(SCORES_KEY) || scores;
+        // Get existing scores
+        let scores = await redis.get<Score[]>(SCORES_KEY);
+        if (!scores) scores = defaultScores;
 
-      // Add new score and sort
-      existingScores.push(newScore);
-      existingScores.sort((a, b) => b.score - a.score);
-      const topScores = existingScores.slice(0, 10);
+        // Add new score and sort
+        scores.push(newScore);
+        scores.sort((a, b) => b.score - a.score);
+        const topScores = scores.slice(0, 10);
 
-      // Save scores
-      await redis.set(SCORES_KEY, topScores);
+        // Save scores
+        await redis.set(SCORES_KEY, topScores);
 
-      return res.status(200).json(topScores);
+        return res.status(200).json(topScores);
+      } catch (error) {
+        console.error('Error saving score:', error);
+        throw new Error('Failed to save score');
+      }
     }
 
     // Invalid method
@@ -85,7 +106,11 @@ export default async function handler(
     console.error('API Error:', error);
     return res.status(500).json({
       error: 'Server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      message: error instanceof Error ? error.message : 'Unknown error',
+      env: {
+        hasUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+        hasToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
+      }
     });
   }
 }
