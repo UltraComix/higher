@@ -38,17 +38,21 @@ function App() {
   }, []);
 
   const fetchHighScores = async () => {
-    setLoading(true);
     try {
-      const response = await fetch('/api/scores');
+      const response = await fetch('/api/scores', {
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
       if (response.ok) {
         const scores = await response.json();
         setHighScores(scores);
+      } else {
+        console.error('Failed to fetch scores:', await response.text());
       }
     } catch (error) {
       console.error('Error fetching scores:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -179,6 +183,7 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           name: playerInitials.toUpperCase().padEnd(3, ' '),
@@ -186,7 +191,13 @@ function App() {
         })
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = { error: await response.text() };
+      }
       
       if (response.ok) {
         setHighScores(data);
@@ -194,11 +205,11 @@ function App() {
         setGameState('leaderboard');
       } else {
         console.error('Failed to save score:', data.error);
-        alert('Failed to save score. Please try again.');
+        alert(`Failed to save score: ${data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error saving score:', error);
-      alert('Failed to save score. Please try again.');
+      alert('Network error. Please check your connection and try again.');
     }
   };
 

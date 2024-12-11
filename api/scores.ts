@@ -1,14 +1,27 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient, ServerApiVersion } from 'mongodb';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 if (!process.env.MONGODB_URI) {
   throw new Error('Missing MONGODB_URI environment variable');
 }
 
-// Create a new MongoClient for each request
+let cachedClient: MongoClient | null = null;
+
 async function connectToDatabase() {
-  const client = new MongoClient(process.env.MONGODB_URI!);
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  const client = new MongoClient(process.env.MONGODB_URI!, {
+    serverApi: {
+      version: ServerApiVersion.v1,
+      strict: true,
+      deprecationErrors: true,
+    }
+  });
+
   await client.connect();
+  cachedClient = client;
   return client;
 }
 
@@ -23,9 +36,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  let client;
   try {
-    client = await connectToDatabase();
+    const client = await connectToDatabase();
     const db = client.db('higher');
     const collection = db.collection('scores');
 
@@ -73,9 +85,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Database error',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
-  } finally {
-    if (client) {
-      await client.close();
-    }
   }
 }
