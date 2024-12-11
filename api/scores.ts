@@ -1,9 +1,4 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-
-export const config = {
-  runtime: 'edge'
-};
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 interface Score {
   name: string;
@@ -14,66 +9,64 @@ interface Score {
 // In-memory cache for development
 let scores: Score[] = [];
 
-export default async function handler(req: NextRequest) {
-  const headers = {
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Content-Type': 'application/json'
-  };
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // Handle preflight request
   if (req.method === 'OPTIONS') {
-    return new NextResponse(null, { headers });
+    res.status(200).end();
+    return;
   }
 
   try {
+    // GET request - return scores
     if (req.method === 'GET') {
-      return NextResponse.json(scores, { headers });
+      return res.status(200).json(scores);
     }
 
+    // POST request - add new score
     if (req.method === 'POST') {
-      const body = await req.json();
-      const { name, score } = body;
+      const { name, score } = req.body;
 
+      // Validate input
       if (!name || typeof score !== 'number') {
-        return NextResponse.json(
-          {
-            error: 'Invalid score data',
-            received: { name, score, typeofScore: typeof score }
-          },
-          { status: 400, headers }
-        );
+        return res.status(400).json({
+          error: 'Invalid score data',
+          received: { name, score, typeofScore: typeof score }
+        });
       }
 
+      // Create new score
       const newScore: Score = {
         name: name.toUpperCase().slice(0, 3),
         score,
         date: new Date().toISOString()
       };
 
-      // Add new score and sort
+      // Add score and sort
       scores.push(newScore);
       scores.sort((a, b) => b.score - a.score);
       
       // Keep only top 10
       scores = scores.slice(0, 10);
 
-      return NextResponse.json(scores, { headers });
+      return res.status(200).json(scores);
     }
 
-    return NextResponse.json(
-      { error: 'Method not allowed' },
-      { status: 405, headers }
-    );
+    // Invalid method
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json(
-      {
-        error: 'Server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500, headers }
-    );
+    return res.status(500).json({
+      error: 'Server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
