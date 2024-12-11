@@ -40,12 +40,14 @@ function App() {
   const fetchHighScores = async () => {
     try {
       const response = await fetch('/api/scores');
-      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-      if (response.ok && Array.isArray(data)) {
+      const data = await response.json();
+      if (Array.isArray(data)) {
         setHighScores(data);
-      } else {
-        console.error('Failed to fetch scores:', data?.error || 'Unknown error');
       }
     } catch (error) {
       console.error('Error fetching scores:', error);
@@ -178,8 +180,7 @@ function App() {
       const response = await fetch('/api/scores', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           name: playerInitials.toUpperCase().padEnd(3, ' '),
@@ -187,20 +188,17 @@ function App() {
         })
       });
 
-      const data = await response.json();
-      
-      if (response.ok) {
-        setHighScores(data);
-        setIsHighScore(false);
-        setGameState('leaderboard');
-      } else {
-        const errorMessage = data?.error || data?.message || 'Unknown error';
-        console.error('Failed to save score:', errorMessage);
-        alert(`Failed to save score: ${errorMessage}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
+      setHighScores(data);
+      setIsHighScore(false);
+      setGameState('leaderboard');
     } catch (error) {
       console.error('Error saving score:', error);
-      alert('Network error. Please check your connection and try again.');
+      alert('Unable to save score. Please try again later.');
     }
   };
 
