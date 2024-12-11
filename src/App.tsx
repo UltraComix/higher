@@ -45,11 +45,19 @@ function App() {
         }
       });
 
-      if (response.ok) {
-        const scores = await response.json();
-        setHighScores(scores);
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse response:', text);
+        return;
+      }
+
+      if (response.ok && Array.isArray(data)) {
+        setHighScores(data);
       } else {
-        console.error('Failed to fetch scores:', await response.text());
+        console.error('Failed to fetch scores:', data?.error || 'Unknown error');
       }
     } catch (error) {
       console.error('Error fetching scores:', error);
@@ -191,12 +199,13 @@ function App() {
         })
       });
 
+      const text = await response.text();
       let data;
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
-      } else {
-        data = { error: await response.text() };
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse response:', text);
+        throw new Error('Invalid server response');
       }
       
       if (response.ok) {
@@ -204,8 +213,9 @@ function App() {
         setIsHighScore(false);
         setGameState('leaderboard');
       } else {
-        console.error('Failed to save score:', data.error);
-        alert(`Failed to save score: ${data.error || 'Unknown error'}`);
+        const errorMessage = data?.error || data?.message || 'Unknown error';
+        console.error('Failed to save score:', errorMessage);
+        alert(`Failed to save score: ${errorMessage}`);
       }
     } catch (error) {
       console.error('Error saving score:', error);

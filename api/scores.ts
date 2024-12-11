@@ -1,5 +1,10 @@
 import { MongoClient, ServerApiVersion } from 'mongodb';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { NextRequest } from 'next/server';
+
+export const config = {
+  runtime: 'edge',
+  regions: ['iad1'], // US East (N. Virginia)
+};
 
 if (!process.env.MONGODB_URI) {
   throw new Error('Missing MONGODB_URI environment variable');
@@ -25,15 +30,17 @@ async function connectToDatabase() {
   return client;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+async function handler(req: NextRequest) {
+  const headers = {
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json',
+  };
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return new Response(null, { headers, status: 200 });
   }
 
   try {
@@ -48,17 +55,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .limit(10)
         .toArray();
       
-      return res.status(200).json(scores);
+      return new Response(JSON.stringify(scores), { 
+        headers,
+        status: 200 
+      });
     }
 
     if (req.method === 'POST') {
-      const { name, score } = req.body;
+      const body = await req.json();
+      const { name, score } = body;
       
       if (!name || typeof score !== 'number') {
-        return res.status(400).json({ 
-          error: 'Invalid score data',
-          received: { name, score, typeofScore: typeof score }
-        });
+        return new Response(
+          JSON.stringify({ 
+            error: 'Invalid score data',
+            received: { name, score, typeofScore: typeof score }
+          }), 
+          { headers, status: 400 }
+        );
       }
 
       const newScore = {
@@ -75,15 +89,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .limit(10)
         .toArray();
 
-      return res.status(200).json(updatedScores);
+      return new Response(JSON.stringify(updatedScores), { 
+        headers,
+        status: 200 
+      });
     }
 
-    return res.status(405).json({ error: 'Method not allowed' });
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }), 
+      { headers, status: 405 }
+    );
   } catch (error) {
     console.error('API Error:', error);
-    return res.status(500).json({ 
-      error: 'Database error',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return new Response(
+      JSON.stringify({ 
+        error: 'Database error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }), 
+      { headers, status: 500 }
+    );
   }
 }
+
+export default handler;
