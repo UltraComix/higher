@@ -295,7 +295,7 @@ function App() {
 
   const handleImageError = (cardType: string, error: any) => {
     console.error(`Error loading ${cardType} image:`, error);
-    setImageLoadError(`Failed to load ${cardType} card image. Path: ${cardType === 'current' ? currentCard?.image : nextCard?.image}`);
+    setImageLoadError(`Failed to load ${cardType === 'current' ? currentCard?.image : nextCard?.image}`);
   };
 
   const getPowerLabel = (value: number): string => {
@@ -334,23 +334,23 @@ function App() {
       {loading ? (
         <div className="text-gray-400 text-center text-xl">Loading...</div>
       ) : (
-        <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md">
+        <div className="bg-gray-800/80 p-6 rounded-lg w-full max-w-md">
           <table className="w-full">
             <thead>
-              <tr className="text-gray-400 border-b border-gray-700">
-                <th className="pb-2">Rank</th>
-                <th className="pb-2">Name</th>
-                <th className="pb-2">Score</th>
-                <th className="pb-2">Date</th>
+              <tr className="text-yellow-400 border-b border-gray-600">
+                <th className="pb-2 font-bold">Rank</th>
+                <th className="pb-2 font-bold">Name</th>
+                <th className="pb-2 font-bold">Score</th>
+                <th className="pb-2 font-bold">Date</th>
               </tr>
             </thead>
             <tbody>
               {highScores.map((score, index) => (
-                <tr key={index} className="text-center border-b border-gray-700 last:border-0">
-                  <td className="py-2">{index + 1}</td>
-                  <td className="py-2">{score.name}</td>
-                  <td className="py-2">{score.score}</td>
-                  <td className="py-2">{new Date(score.date).toLocaleDateString()}</td>
+                <tr key={index} className="text-center border-b border-gray-700 last:border-0 hover:bg-gray-700/50">
+                  <td className="py-3 text-white">{index + 1}</td>
+                  <td className="py-3 text-white font-bold">{score.name}</td>
+                  <td className="py-3 text-green-400">{score.score}</td>
+                  <td className="py-3 text-gray-300">{new Date(score.date).toLocaleDateString()}</td>
                 </tr>
               ))}
             </tbody>
