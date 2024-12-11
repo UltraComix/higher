@@ -1,11 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 
 interface Score {
   name: string;
   score: number;
   date: string;
 }
+
+// Initialize Redis client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || ''
+});
 
 const SCORES_KEY = 'game:scores';
 
@@ -35,7 +41,7 @@ export default async function handler(
   try {
     // GET scores
     if (req.method === 'GET') {
-      const scores = await kv.get<Score[]>(SCORES_KEY) || [];
+      const scores = await redis.get<Score[]>(SCORES_KEY) || [];
       return res.status(200).json(scores);
     }
 
@@ -59,7 +65,7 @@ export default async function handler(
       };
 
       // Get existing scores
-      const existingScores = await kv.get<Score[]>(SCORES_KEY) || scores;
+      const existingScores = await redis.get<Score[]>(SCORES_KEY) || scores;
 
       // Add new score and sort
       existingScores.push(newScore);
@@ -67,7 +73,7 @@ export default async function handler(
       const topScores = existingScores.slice(0, 10);
 
       // Save scores
-      await kv.set(SCORES_KEY, topScores);
+      await redis.set(SCORES_KEY, topScores);
 
       return res.status(200).json(topScores);
     }
