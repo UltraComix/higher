@@ -1,5 +1,10 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { Redis } from '@upstash/redis';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { Redis } from '@upstash/redis/cloudflare';
+
+export const config = {
+  runtime: 'edge'
+};
 
 interface Score {
   name: string;
@@ -8,31 +13,31 @@ interface Score {
 }
 
 // Initialize Redis client
-const redis = Redis.fromEnv();
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || ''
+});
 
 const SCORES_KEY = 'game:scores';
 
-// Default scores if none exist
+// Default scores
 const defaultScores: Score[] = [
-  { name: "CPU", score: 100, date: "2024-12-11T21:50:08Z" },
-  { name: "BOT", score: 90, date: "2024-12-11T21:50:08Z" },
-  { name: "AI", score: 80, date: "2024-12-11T21:50:08Z" }
+  { name: "CPU", score: 100, date: "2024-12-11T21:53:24Z" },
+  { name: "BOT", score: 90, date: "2024-12-11T21:53:24Z" },
+  { name: "AI", score: 80, date: "2024-12-11T21:53:24Z" }
 ];
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export default async function handler(req: NextRequest) {
+  const headers = {
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json'
+  };
 
-  // Handle preflight
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return new NextResponse(null, { headers });
   }
 
   try {
@@ -41,7 +46,16 @@ export default async function handler(
       await redis.ping();
     } catch (error) {
       console.error('Redis connection error:', error);
-      throw new Error('Failed to connect to Redis');
+      return NextResponse.json(
+        {
+          error: 'Failed to connect to Redis',
+          env: {
+            hasUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+            hasToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
+          }
+        },
+        { status: 500, headers }
+      );
     }
 
     // GET scores
@@ -51,25 +65,29 @@ export default async function handler(
         if (!scores) {
           // Initialize with default scores if none exist
           await redis.set(SCORES_KEY, defaultScores);
-          return res.status(200).json(defaultScores);
+          return NextResponse.json(defaultScores, { headers });
         }
-        return res.status(200).json(scores);
+        return NextResponse.json(scores, { headers });
       } catch (error) {
         console.error('Error fetching scores:', error);
-        throw new Error('Failed to fetch scores');
+        return NextResponse.json(defaultScores, { headers });
       }
     }
 
     // POST new score
     if (req.method === 'POST') {
-      const { name, score } = req.body;
+      const body = await req.json();
+      const { name, score } = body;
 
       // Validate input
       if (!name || typeof score !== 'number') {
-        return res.status(400).json({
-          error: 'Invalid score data',
-          received: { name, score, typeofScore: typeof score }
-        });
+        return NextResponse.json(
+          {
+            error: 'Invalid score data',
+            received: { name, score, typeofScore: typeof score }
+          },
+          { status: 400, headers }
+        );
       }
 
       try {
@@ -92,25 +110,31 @@ export default async function handler(
         // Save scores
         await redis.set(SCORES_KEY, topScores);
 
-        return res.status(200).json(topScores);
+        return NextResponse.json(topScores, { headers });
       } catch (error) {
         console.error('Error saving score:', error);
-        throw new Error('Failed to save score');
+        // Return current scores if save fails
+        return NextResponse.json(scores, { headers });
       }
     }
 
-    // Invalid method
-    return res.status(405).json({ error: 'Method not allowed' });
+    return NextResponse.json(
+      { error: 'Method not allowed' },
+      { status: 405, headers }
+    );
 
   } catch (error) {
     console.error('API Error:', error);
-    return res.status(500).json({
-      error: 'Server error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      env: {
-        hasUrl: !!process.env.UPSTASH_REDIS_REST_URL,
-        hasToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
-      }
-    });
+    return NextResponse.json(
+      {
+        error: 'Server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        env: {
+          hasUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+          hasToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
+        }
+      },
+      { status: 500, headers }
+    );
   }
 }
