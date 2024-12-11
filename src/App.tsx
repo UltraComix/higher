@@ -161,14 +161,19 @@ function App() {
   };
 
   const checkHighScore = (newScore: number) => {
-    if (highScores.length < 10 || newScore > highScores[highScores.length - 1]?.score) {
+    if (highScores.length < 10) {
+      setIsHighScore(true);
+      return;
+    }
+    
+    if (newScore > (highScores[highScores.length - 1]?.score || 0)) {
       setIsHighScore(true);
     }
   };
 
   const saveHighScore = async () => {
-    if (playerInitials.length === 0 || playerInitials.length > 3) return;
-
+    if (playerInitials.length === 0) return;
+    
     try {
       const response = await fetch('/api/scores', {
         method: 'POST',
@@ -185,6 +190,8 @@ function App() {
         await fetchHighScores();
         setIsHighScore(false);
         setGameState('leaderboard');
+      } else {
+        console.error('Failed to save score:', await response.text());
       }
     } catch (error) {
       console.error('Error saving score:', error);
@@ -467,7 +474,7 @@ function App() {
                           <button
                             onClick={saveHighScore}
                             disabled={playerInitials.length === 0}
-                            className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-2 rounded-lg text-xl disabled:opacity-50"
+                            className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-2 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Save Score
                           </button>
