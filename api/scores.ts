@@ -1,114 +1,105 @@
-import { MongoClient, ServerApiVersion } from 'mongodb';
+import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { MongoClient } from 'mongodb';
 
-export const config = {
-  runtime: 'edge',
-  regions: ['iad1'], // US East (N. Virginia)
-};
-
-if (!process.env.MONGODB_URI) {
-  throw new Error('Missing MONGODB_URI environment variable');
+// Get MongoDB URI from environment variable
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+  throw new Error('Please add your MongoDB URI to .env');
 }
 
-let cachedClient: MongoClient | null = null;
+// Configure the client
+const client = new MongoClient(uri, {
+  maxPoolSize: 1,
+  maxIdleTimeMS: 10000,
+  serverSelectionTimeoutMS: 10000,
+  socketTimeoutMS: 20000,
+});
 
-async function connectToDatabase() {
-  if (cachedClient) {
-    return cachedClient;
-  }
-
-  const client = new MongoClient(process.env.MONGODB_URI!, {
-    serverApi: {
-      version: ServerApiVersion.v1,
-      strict: true,
-      deprecationErrors: true,
-    }
-  });
-
-  await client.connect();
-  cachedClient = client;
-  return client;
-}
-
-async function handler(req: NextRequest) {
-  const headers = {
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Content-Type': 'application/json',
-  };
-
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers, status: 200 });
-  }
-
+export default async function handler(req: NextRequest) {
   try {
-    const client = await connectToDatabase();
+    // Connect to MongoDB
+    await client.connect();
     const db = client.db('higher');
     const collection = db.collection('scores');
 
+    // Set CORS headers
+    const headers = {
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Content-Type': 'application/json'
+    };
+
+    // Handle OPTIONS request
+    if (req.method === 'OPTIONS') {
+      return new NextResponse(null, { headers });
+    }
+
+    // Handle GET request
     if (req.method === 'GET') {
       const scores = await collection
         .find({})
         .sort({ score: -1 })
         .limit(10)
         .toArray();
-      
-      return new Response(JSON.stringify(scores), { 
-        headers,
-        status: 200 
-      });
+
+      return NextResponse.json(scores, { headers });
     }
 
+    // Handle POST request
     if (req.method === 'POST') {
       const body = await req.json();
       const { name, score } = body;
-      
+
+      // Validate input
       if (!name || typeof score !== 'number') {
-        return new Response(
-          JSON.stringify({ 
+        return NextResponse.json(
+          {
             error: 'Invalid score data',
             received: { name, score, typeofScore: typeof score }
-          }), 
-          { headers, status: 400 }
+          },
+          { status: 400, headers }
         );
       }
 
+      // Create new score
       const newScore = {
         name: name.toUpperCase().slice(0, 3),
         score,
         date: new Date().toISOString()
       };
 
+      // Insert score
       await collection.insertOne(newScore);
 
+      // Get updated scores
       const updatedScores = await collection
         .find({})
         .sort({ score: -1 })
         .limit(10)
         .toArray();
 
-      return new Response(JSON.stringify(updatedScores), { 
-        headers,
-        status: 200 
-      });
+      return NextResponse.json(updatedScores, { headers });
     }
 
-    return new Response(
-      JSON.stringify({ error: 'Method not allowed' }), 
-      { headers, status: 405 }
+    // Handle invalid methods
+    return NextResponse.json(
+      { error: 'Method not allowed' },
+      { status: 405, headers }
     );
+
   } catch (error) {
     console.error('API Error:', error);
-    return new Response(
-      JSON.stringify({ 
+    return NextResponse.json(
+      {
         error: 'Database error',
         message: error instanceof Error ? error.message : 'Unknown error'
-      }), 
-      { headers, status: 500 }
+      },
+      { status: 500, headers }
     );
+  } finally {
+    // Don't close the client - let connection pooling handle it
   }
 }
-
-export default handler;

@@ -39,20 +39,8 @@ function App() {
 
   const fetchHighScores = async () => {
     try {
-      const response = await fetch('/api/scores', {
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('Failed to parse response:', text);
-        return;
-      }
+      const response = await fetch('/api/scores');
+      const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
         setHighScores(data);
@@ -199,14 +187,7 @@ function App() {
         })
       });
 
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('Failed to parse response:', text);
-        throw new Error('Invalid server response');
-      }
+      const data = await response.json();
       
       if (response.ok) {
         setHighScores(data);
