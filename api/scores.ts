@@ -1,10 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { kv } from '@vercel/kv';
 
 interface Score {
   name: string;
   score: number;
   date: string;
 }
+
+const SCORES_KEY = 'game:scores';
 
 // In-memory scores (will reset on deploy)
 let scores: Score[] = [
@@ -13,7 +16,7 @@ let scores: Score[] = [
   { name: "AI", score: 80, date: "2024-12-11T21:31:01Z" }
 ];
 
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -32,6 +35,7 @@ export default function handler(
   try {
     // GET scores
     if (req.method === 'GET') {
+      const scores = await kv.get<Score[]>(SCORES_KEY) || [];
       return res.status(200).json(scores);
     }
 
@@ -54,12 +58,18 @@ export default function handler(
         date: new Date().toISOString()
       };
 
-      // Add and sort scores
-      scores.push(newScore);
-      scores.sort((a, b) => b.score - a.score);
-      scores = scores.slice(0, 10);
+      // Get existing scores
+      const existingScores = await kv.get<Score[]>(SCORES_KEY) || scores;
 
-      return res.status(200).json(scores);
+      // Add new score and sort
+      existingScores.push(newScore);
+      existingScores.sort((a, b) => b.score - a.score);
+      const topScores = existingScores.slice(0, 10);
+
+      // Save scores
+      await kv.set(SCORES_KEY, topScores);
+
+      return res.status(200).json(topScores);
     }
 
     // Invalid method
