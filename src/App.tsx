@@ -174,6 +174,8 @@ function App() {
   const saveHighScore = async () => {
     if (playerInitials.length === 0) return;
     
+    console.log('Attempting to save score:', { name: playerInitials, score });
+    
     try {
       const response = await fetch('/api/scores', {
         method: 'POST',
@@ -182,16 +184,21 @@ function App() {
         },
         body: JSON.stringify({
           name: playerInitials.toUpperCase().padEnd(3, ' '),
-          score
+          score: Number(score)  // Ensure score is a number
         })
       });
 
+      console.log('Response status:', response.status);
+      const data = await response.text();
+      console.log('Response data:', data);
+
       if (response.ok) {
-        await fetchHighScores();
+        const jsonData = JSON.parse(data);
+        setHighScores(jsonData);
         setIsHighScore(false);
         setGameState('leaderboard');
       } else {
-        console.error('Failed to save score:', await response.text());
+        console.error('Failed to save score. Status:', response.status, 'Data:', data);
       }
     } catch (error) {
       console.error('Error saving score:', error);
